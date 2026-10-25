@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e7d32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vokabelfußball">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Vokabelfußball</title>
+<style>
+  :root {
+    --rot: #d62828;
+    --gelb: #f4c20d;
+    --gruen: #2e7d32;
+    --dunkel: #1b2a1f;
+    --hell: #f6f7f2;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  button, .stage, summary { touch-action: manipulation; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--gruen);
+    background-image:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 80px, rgba(0,0,0,0) 80px 160px);
+    color: var(--dunkel);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+             max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    -webkit-text-size-adjust: 100%;
+  }
+  h1 { color: #fff; margin: 4px 0 14px; text-align: center; font-size: clamp(1.6rem, 4vw, 2.4rem); letter-spacing: .5px; }
+  .screen { display: none; width: 100%; max-width: 900px; }
+  .screen.active { display: block; }
+  .card {
+    background: var(--hell);
+    border-radius: 18px;
+    padding: 22px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .card h2 { margin-top: 0; }
+  .hint { color: #555; font-size: .95rem; margin-top: 0; }
+
+  /* Setup */
+  .vocab-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; margin: 14px 0; }
+  @media (max-width: 640px) { .vocab-grid { grid-template-columns: 1fr; } }
+  .vocab-row { display: flex; align-items: center; gap: 8px; }
+  .vocab-row span { width: 28px; text-align: right; font-weight: 700; color: #555; }
+  .vocab-row input {
+    flex: 1; padding: 10px 12px; font-size: 1.05rem; border: 2px solid #ccd; border-radius: 10px;
+  }
+  .vocab-row input:focus { outline: none; border-color: var(--gruen); }
+  textarea {
+    width: 100%; min-height: 160px; padding: 10px 12px; font-size: 1.05rem;
+    border: 2px solid #ccd; border-radius: 10px; font-family: inherit;
+  }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+  button {
+    font: inherit; font-weight: 700; cursor: pointer; border: none; border-radius: 12px;
+    padding: 12px 20px; background: #dfe3da; color: var(--dunkel);
+  }
+  button:hover { filter: brightness(.95); }
+  button.primary { background: var(--gruen); color: #fff; font-size: 1.15rem; padding: 14px 26px; }
+  button.danger { background: #fff; color: #a33; border: 2px solid #e2b3b3; }
+  .error { color: #b00020; font-weight: 600; min-height: 1.4em; margin: 8px 0 0; }
+
+  .card + .card { margin-top: 16px; }
+  /* Spielerliste */
+  .teams { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 12px 0; }
+  @media (max-width: 700px) { .teams { grid-template-columns: 1fr; } }
+  .team h3 { margin: 0 0 8px; padding: 6px 12px; border-radius: 10px; font-size: 1.05rem; }
+  .team.red h3 { background: var(--rot); color: #fff; }
+  .team.yellow h3 { background: var(--gelb); color: #222; }
+  .prow { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; transition: opacity .15s; }
+  .prow.absent { opacity: .45; }
+  .prow.absent .pname { text-decoration: line-through; }
+  .prow input[type=checkbox] { width: 30px; height: 30px; flex: none; cursor: pointer; accent-color: var(--gruen); }
+  .pnum { min-width: 34px; text-align: center; font-weight: 800; border-radius: 8px; padding: 6px 0; }
+  .pnum.red { background: var(--rot); color: #fff; }
+  .pnum.yellow { background: var(--gelb); color: #222; }
+  .pname { flex: 1; padding: 8px 10px; font-size: 1.05rem; border: 2px solid #ccd; border-radius: 10px; min-width: 0; }
+  .pname:focus { outline: none; border-color: var(--gruen); }
+  .presence-info { font-weight: 600; margin: 6px 0 0; }
+  .presence-info.warn { color: #b26a00; }
+  .pl-name { font-size: .42em; font-weight: 700; margin-top: 4px; }
+  .pl-extra { font-size: .3em; font-weight: 600; opacity: .85; margin-top: 2px; }
+
+  /* Spiel */
+  .topbar { display: flex; justify-content: space-between; align-items: center; color: #fff; margin-bottom: 10px; font-weight: 700; font-size: 1.1rem; }
+  .progress { height: 10px; background: rgba(255,255,255,.3); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+  .progress > div { height: 100%; background: #fff; width: 0; transition: width .3s; }
+  .stage {
+    background: var(--hell); border-radius: 22px; min-height: 55vh; min-height: 60dvh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 24px; text-align: center; cursor: pointer; -webkit-user-select: none; user-select: none;
+    -webkit-touch-callout: none;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .label { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 2px; color: #666; margin-bottom: 14px; }
+  .vocab { font-size: clamp(2.4rem, 9vw, 6rem); font-weight: 800; line-height: 1.1; word-break: break-word; }
+  .tap { margin-top: 26px; color: #777; font-size: 1.05rem; }
+  .vs { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: center; margin: 10px 0; }
+  .player {
+    font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 800; padding: 18px 30px; border-radius: 20px;
+    min-width: 230px; box-shadow: 0 4px 10px rgba(0,0,0,.25);
+  }
+  .player.red { background: var(--rot); color: #fff; }
+  .player.yellow { background: var(--gelb); color: #222; }
+  .versus { font-size: clamp(1.6rem, 5vw, 3rem); font-weight: 800; color: #555; }
+  .small-vocab { font-size: 1.4rem; color: #555; margin-bottom: 10px; }
+  .nav { display: flex; justify-content: space-between; margin-top: 14px; }
+  .nav button { background: rgba(255,255,255,.9); }
+
+  /* Ende */
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #ddd; }
+  .chip { display: inline-block; padding: 2px 12px; border-radius: 999px; font-weight: 700; }
+  .chip.red { background: var(--rot); color: #fff; }
+  .chip.yellow { background: var(--gelb); color: #222; }
+</style>
+</head>
+<body>
+
+<h1>⚽ Vokabelfußball</h1>
+
+<!-- Einrichtung -->
+<div id="setup" class="screen active">
+  <div class="card">
+    <h2>Spieler &amp; Anwesenheit</h2>
+    <p class="hint">Namen werden dauerhaft im Browser gespeichert. Hake ab, wer heute <strong>nicht</strong> da ist – fehlende Spieler kommen nicht dran, dafür spielen einzelne Anwesende doppelt.</p>
+    <div class="teams">
+      <div class="team red"><h3>Team rot</h3><div id="playersRed"></div></div>
+      <div class="team yellow"><h3>Team gelb</h3><div id="playersYellow"></div></div>
+    </div>
+    <p class="presence-info" id="presenceInfo"></p>
+    <div class="buttons">
+      <button id="allPresentBtn">Alle anwesend</button>
+      <button class="danger" id="clearNamesBtn">Namen löschen</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Vokabeln eingeben</h2>
+    <p class="hint">Trage die 12 Vokabeln ein, die abgefragt werden sollen. Sie kommen in dieser Reihenfolge dran. Die Eingaben werden im Browser gespeichert.</p>
+    <div class="vocab-grid" id="vocabGrid"></div>
+    <details>
+      <summary style="cursor:pointer;font-weight:600;">Liste auf einmal einfügen (eine Vokabel pro Zeile)</summary>
+      <textarea id="bulk" placeholder="Eine Vokabel pro Zeile …"></textarea>
+      <div class="buttons"><button id="bulkBtn">In die Felder übernehmen</button></div>
+    </details>
+    <p class="error" id="error"></p>
+    <div class="buttons">
+      <button class="primary" id="startBtn">Spiel starten ▶</button>
+      <button class="danger" id="clearBtn">Felder leeren</button>
+    </div>
+  </div>
+</div>
+
+<!-- Spiel -->
+<div id="game" class="screen">
+  <div class="topbar"><span id="roundInfo"></span><span id="phaseInfo"></span></div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="stage" id="stage"></div>
+  <div class="nav">
+    <button id="backBtn">◀ Zurück</button>
+    <button id="quitBtn">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Ende -->
+<div id="end" class="screen">
+  <div class="card">
+    <h2>🏁 Abpfiff – alle 12 Durchgänge sind gespielt!</h2>
+    <table id="summary"></table>
+    <div class="buttons">
+      <button class="primary" id="againBtn">Neue Auslosung (gleiche Vokabeln)</button>
+      <button id="editBtn">Vokabeln ändern</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var N = 12;
+  var STORAGE_KEY = "vokabelfussball_vokabeln";
+  var vocabs = [];
+  var pairs = [];      // { red: n, yellow: n }
+  var round = 0;       // 0..11
+  var revealed = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function show(name) {
+    ["setup", "game", "end"].forEach(function (s) {
+      $(s).classList.toggle("active", s === name);
+    });
+  }
+
+  // ---- Spieler & Anwesenheit ----
+  var PLAYERS_KEY = "vokabelfussball_spieler";
+  var rows = { red: [], yellow: [] };   // { box, check, name, row }
+
+  function buildTeam(team, containerId) {
+    var box = $(containerId);
+    for (var i = 1; i <= N; i++) {
+      var row = document.createElement("div");
+      row.className = "prow";
+      row.innerHTML = '<input type="checkbox" checked title="anwesend" aria-label="' + team + ' ' + i + ' anwesend">' +
+                      '<span class="pnum ' + team + '">' + i + '</span>' +
+                      '<input type="text" class="pname" placeholder="Name" autocomplete="off" aria-label="Name ' + team + ' ' + i + '">';
+      box.appendChild(row);
+      var entry = { row: row, check: row.children[0], name: row.children[2] };
+      entry.check.addEventListener("change", function () { savePlayers(); refreshPresence(); });
+      entry.name.addEventListener("input", savePlayers);
+      rows[team].push(entry);
+    }
+  }
+  buildTeam("red", "playersRed");
+  buildTeam("yellow", "playersYellow");
+
+  function savePlayers() {
+    var data = {};
+    ["red", "yellow"].forEach(function (t) {
+      data[t] = rows[t].map(function (e) { return { n: e.name.value, p: e.check.checked }; });
+    });
+    try { localStorage.setItem(PLAYERS_KEY, JSON.stringify(data)); } catch (e) {}
+  }
+  function loadPlayers() {
+    try {
+      var data = JSON.parse(localStorage.getItem(PLAYERS_KEY) || "null");
+      if (!data) return;
+      ["red", "yellow"].forEach(function (t) {
+        rows[t].forEach(function (e, i) {
+          var d = (data[t] || [])[i];
+          if (d) { e.name.value = d.n || ""; e.check.checked = d.p !== false; }
+        });
+      });
+    } catch (e) {}
+  }
+  function presentList(team) {
+    var a = [];
+    rows[team].forEach(function (e, i) { if (e.check.checked) a.push(i + 1); });
+    return a;
+  }
+  function nameOf(team, n) { return rows[team][n - 1].name.value.trim(); }
+
+  function refreshPresence() {
+    ["red", "yellow"].forEach(function (t) {
+      rows[t].forEach(function (e) { e.row.classList.toggle("absent", !e.check.checked); });
+    });
+    var r = presentList("red").length, y = presentList("yellow").length;
+    var el = $("presenceInfo");
+    var txt = "Anwesend: Rot " + r + " von " + N + " · Gelb " + y + " von " + N + ".";
+    var warn = false;
+    if (r === 0 || y === 0) {
+      txt += " Pro Team muss mindestens ein Spieler anwesend sein.";
+      warn = true;
+    } else if (r < N || y < N) {
+      var parts = [];
+      if (r < N) parts.push((N - r) + " Einsatz/Einsätze doppelt bei Rot");
+      if (y < N) parts.push((N - y) + " Einsatz/Einsätze doppelt bei Gelb");
+      txt += " Es gibt immer 12 Durchgänge, daher: " + parts.join(", ") + ".";
+      warn = true;
+    }
+    el.textContent = txt;
+    el.classList.toggle("warn", warn);
+  }
+  loadPlayers();
+  refreshPresence();
+
+  $("allPresentBtn").addEventListener("click", function () {
+    ["red", "yellow"].forEach(function (t) { rows[t].forEach(function (e) { e.check.checked = true; }); });
+    savePlayers(); refreshPresence();
+  });
+  $("clearNamesBtn").addEventListener("click", function () {
+    if (!confirm("Alle gespeicherten Namen löschen?")) return;
+    ["red", "yellow"].forEach(function (t) { rows[t].forEach(function (e) { e.name.value = ""; }); });
+    savePlayers();
+  });
+
+  // ---- Einrichtung ----
+  var grid = $("vocabGrid");
+  for (var i = 0; i < N; i++) {
+    var row = document.createElement("div");
+    row.className = "vocab-row";
+    row.innerHTML = '<span>' + (i + 1) + '.</span><input type="text" autocomplete="off" aria-label="Vokabel ' + (i + 1) + '">';
+    grid.appendChild(row);
+  }
+  var inputs = grid.querySelectorAll("input");
+
+  function loadSaved() {
+    try {
+      var saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      for (var i = 0; i < N; i++) inputs[i].value = saved[i] || "";
+    } catch (e) {}
+  }
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.prototype.map.call(inputs, function (x) { return x.value; })));
+    } catch (e) {}
+  }
+  loadSaved();
+  Array.prototype.forEach.call(inputs, function (inp, idx) {
+    inp.addEventListener("input", save);
+    inp.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (idx < N - 1) inputs[idx + 1].focus(); else $("startBtn").focus();
+      }
+    });
+  });
+
+  $("bulkBtn").addEventListener("click", function () {
+    var lines = $("bulk").value.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+    for (var i = 0; i < N; i++) inputs[i].value = lines[i] || "";
+    save();
+    $("error").textContent = lines.length > N ? "Hinweis: Es wurden nur die ersten 12 Zeilen übernommen." : "";
+  });
+
+  $("clearBtn").addEventListener("click", function () {
+    if (!confirm("Alle Felder leeren?")) return;
+    Array.prototype.forEach.call(inputs, function (x) { x.value = ""; });
+    $("bulk").value = "";
+    save();
+    $("error").textContent = "";
+  });
+
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  // Füllt 12 Plätze mit den anwesenden Spielern: erst alle einmal,
+  // Überschuss möglichst gleichmäßig verteilt (zufällig gemischte Runden).
+  function fillSlots(list) {
+    var out = [];
+    while (out.length < N) out = out.concat(shuffle(list));
+    return out.slice(0, N);
+  }
+
+  function draw() {
+    var R = presentList("red"), Y = presentList("yellow");
+    var best = null, bestDup = Infinity;
+    for (var t = 0; t < 60; t++) {
+      var reds = shuffle(fillSlots(R)), yellows = shuffle(fillSlots(Y));
+      var seen = {}, dup = 0;
+      for (var i = 0; i < N; i++) {
+        var key = reds[i] + "-" + yellows[i];
+        if (seen[key]) dup++;
+        seen[key] = true;
+      }
+      if (dup < bestDup) { bestDup = dup; best = { reds: reds, yellows: yellows }; }
+      if (dup === 0) break;
+    }
+    pairs = best.reds.map(function (r, i) { return { red: r, yellow: best.yellows[i] }; });
+  }
+
+  function startGame(redraw) {
+    if (redraw !== false) draw();
+    round = 0;
+    revealed = false;
+    show("game");
+    render();
+  }
+
+  $("startBtn").addEventListener("click", function () {
+    vocabs = Array.prototype.map.call(inputs, function (x) { return x.value.trim(); });
+    var missing = [];
+    vocabs.forEach(function (v, i) { if (!v) missing.push(i + 1); });
+    if (missing.length) {
+      $("error").textContent = "Bitte alle 12 Vokabeln ausfüllen (es fehlt: " + missing.join(", ") + ").";
+      return;
+    }
+    $("error").textContent = "";
+    save();
+    if (presentList("red").length === 0 || presentList("yellow").length === 0) {
+      $("error").textContent = "Pro Team muss mindestens ein Spieler anwesend sein.";
+      return;
+    }
+    startGame(true);
+  });
+
+  // ---- Spiel ----
+  function esc(s) {
+    return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
+  }
+
+  function playerHtml(team, n) {
+    var count = 0;
+    for (var i = 0; i <= round; i++) if (pairs[i][team] === n) count++;
+    var name = nameOf(team, n);
+    return '<div class="player ' + team + '">' + team + ' ' + n +
+           (name ? '<div class="pl-name">' + esc(name) + '</div>' : '') +
+           (count > 1 ? '<div class="pl-extra">' + count + '. Einsatz</div>' : '') +
+           '</div>';
+  }
+
+  function render() {
+    var p = pairs[round];
+    $("roundInfo").textContent = "Durchgang " + (round + 1) + " von " + N;
+    $("phaseInfo").textContent = revealed ? "Spieler" : "Vokabel";
+    $("bar").style.width = (((round + (revealed ? 1 : 0)) / N) * 100) + "%";
+    var html;
+    if (!revealed) {
+      html = '<div class="label">Vokabel</div>' +
+             '<div class="vocab">' + esc(vocabs[round]) + '</div>' +
+             '<div class="tap">Klick, um die Spieler zu ziehen →</div>';
+    } else {
+      html = '<div class="small-vocab">' + esc(vocabs[round]) + '</div>' +
+             '<div class="vs">' +
+               playerHtml("yellow", p.yellow) +
+               '<div class="versus">vs.</div>' +
+               playerHtml("red", p.red) +
+             '</div>' +
+             '<div class="tap">' + (round === N - 1 ? 'Klick für die Übersicht →' : 'Klick für den nächsten Durchgang →') + '</div>';
+    }
+    $("stage").innerHTML = html;
+  }
+
+  function next() {
+    if (!revealed) { revealed = true; render(); return; }
+    if (round === N - 1) { showEnd(); return; }
+    round++; revealed = false; render();
+  }
+  function back() {
+    if (revealed) { revealed = false; render(); return; }
+    if (round > 0) { round--; revealed = true; render(); }
+  }
+
+  $("stage").addEventListener("click", next);
+  $("backBtn").addEventListener("click", back);
+  $("quitBtn").addEventListener("click", function () {
+    if (confirm("Spiel abbrechen und zurück zur Eingabe?")) show("setup");
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!$("game").classList.contains("active")) return;
+    if (e.key === " " || e.key === "Enter" || e.key === "ArrowRight") { e.preventDefault(); next(); }
+    else if (e.key === "ArrowLeft" || e.key === "Backspace") { e.preventDefault(); back(); }
+  });
+
+  // ---- Ende ----
+  function showEnd() {
+    var rows = '<tr><th>#</th><th>Vokabel</th><th>Gelb</th><th>Rot</th></tr>';
+    pairs.forEach(function (p, i) {
+      rows += '<tr><td>' + (i + 1) + '</td><td>' + esc(vocabs[i]) + '</td>' +
+              '<td><span class="chip yellow">yellow ' + p.yellow + (nameOf("yellow", p.yellow) ? ' · ' + esc(nameOf("yellow", p.yellow)) : '') + '</span></td>' +
+              '<td><span class="chip red">red ' + p.red + (nameOf("red", p.red) ? ' · ' + esc(nameOf("red", p.red)) : '') + '</span></td></tr>';
+    });
+    $("summary").innerHTML = rows;
+    $("bar").style.width = "100%";
+    show("end");
+  }
+  $("againBtn").addEventListener("click", function () { startGame(true); });
+  $("editBtn").addEventListener("click", function () { show("setup"); });
+})();
+
+// Offline-Speicher (funktioniert, wenn die Seite über https geöffnet wurde)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", function () {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  });
+}
+</script>
+</body>
+</html>
