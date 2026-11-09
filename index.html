@@ -88,15 +88,15 @@
   .pname:focus { outline: none; border-color: var(--gruen); }
   .presence-info { font-weight: 600; margin: 6px 0 0; }
   .presence-info.warn { color: #b26a00; }
-  .pl-name { font-size: .42em; font-weight: 700; margin-top: 4px; }
-  .pl-extra { font-size: .3em; font-weight: 600; opacity: .85; margin-top: 2px; }
+  .pl-name { font-size: clamp(1.1rem, 3vw, 1.8rem); font-weight: 700; margin-top: 4px; }
+  .pl-extra { font-size: clamp(.85rem, 2vw, 1.1rem); font-weight: 600; opacity: .85; margin-top: 2px; }
 
   /* Spiel */
   .topbar { display: flex; justify-content: space-between; align-items: center; color: #fff; margin-bottom: 10px; font-weight: 700; font-size: 1.1rem; }
   .progress { height: 10px; background: rgba(255,255,255,.3); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
   .progress > div { height: 100%; background: #fff; width: 0; transition: width .3s; }
   .stage {
-    background: var(--hell); border-radius: 22px; min-height: 55vh; min-height: 60dvh;
+    background: var(--hell); border-radius: 22px; min-height: 45vh; min-height: 50dvh;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 24px; text-align: center; cursor: pointer; -webkit-user-select: none; user-select: none;
     -webkit-touch-callout: none;
@@ -107,11 +107,35 @@
   .tap { margin-top: 26px; color: #777; font-size: 1.05rem; }
   .vs { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: center; margin: 10px 0; }
   .player {
-    font-size: clamp(2rem, 7vw, 4.5rem); font-weight: 800; padding: 18px 30px; border-radius: 20px;
-    min-width: 230px; box-shadow: 0 4px 10px rgba(0,0,0,.25);
+    font-size: clamp(3.5rem, 14vw, 7.5rem); font-weight: 800; line-height: 1.1;
+    padding: 18px 30px; border-radius: 20px; min-width: 190px;
+    box-shadow: 0 4px 10px rgba(0,0,0,.25); cursor: pointer;
+    transition: transform .15s, opacity .15s;
   }
   .player.red { background: var(--rot); color: #fff; }
   .player.yellow { background: var(--gelb); color: #222; }
+  .player.won { outline: 8px solid var(--gruen); outline-offset: 5px; transform: scale(1.06); }
+  .player.lost { opacity: .45; }
+
+  /* Punktestand */
+  .scoreboard { display: flex; justify-content: center; gap: 14px; margin-bottom: 14px; }
+  .scoreboard:empty { display: none; }
+  .score { min-width: 130px; border-radius: 16px; padding: 6px 22px; text-align: center; font-weight: 800; box-shadow: 0 4px 10px rgba(0,0,0,.25); }
+  .score small { display: block; font-size: .8rem; letter-spacing: 2px; text-transform: uppercase; opacity: .85; }
+  .score b { display: block; font-size: 2.6rem; line-height: 1.1; }
+  .score.red { background: var(--rot); color: #fff; }
+  .score.yellow { background: var(--gelb); color: #222; }
+  .final-line { text-align: center; font-size: 1.3rem; font-weight: 700; margin: 4px 0 14px; }
+
+  /* Draw-Button (bewusst dezent) */
+  .draw-wrap { margin-top: 18px; }
+  button.draw {
+    background: transparent; color: #9a9e96; font-weight: 600; font-size: .9rem;
+    padding: 5px 16px; border: 1px solid #cfd2ca; border-radius: 999px;
+  }
+  button.draw.on { color: #555; background: #e8eae3; border-color: #999; }
+  .stage .next { margin-top: 16px; }
+  .win-chip { font-weight: 700; }
   .versus { font-size: clamp(1.6rem, 5vw, 3rem); font-weight: 800; color: #555; }
   .small-vocab { font-size: 1.4rem; color: #555; margin-bottom: 10px; }
   .nav { display: flex; justify-content: space-between; margin-top: 14px; }
@@ -127,7 +151,7 @@
 </head>
 <body>
 
-<h1>⚽ Vokabelfußball</h1>
+<h1 id="title">⚽ Vokabelfußball</h1>
 
 <!-- Einrichtung -->
 <div id="setup" class="screen active">
@@ -165,21 +189,24 @@
 <div id="game" class="screen">
   <div class="topbar"><span id="roundInfo"></span><span id="phaseInfo"></span></div>
   <div class="progress"><div id="bar"></div></div>
+  <div class="scoreboard" id="scoreboard"></div>
   <div class="stage" id="stage"></div>
   <div class="nav">
-    <button id="backBtn">◀ Zurück</button>
-    <button id="quitBtn">Abbrechen</button>
+    <button id="backBtn">◀ Back</button>
+    <button id="quitBtn">Cancel</button>
   </div>
 </div>
 
 <!-- Ende -->
 <div id="end" class="screen">
   <div class="card">
-    <h2>🏁 Abpfiff – alle 12 Durchgänge sind gespielt!</h2>
+    <h2>🏁 Full time – all 12 rounds played!</h2>
+    <div class="scoreboard" id="finalScore"></div>
+    <p class="final-line" id="finalLine"></p>
     <table id="summary"></table>
     <div class="buttons">
-      <button class="primary" id="againBtn">Neue Auslosung (gleiche Vokabeln)</button>
-      <button id="editBtn">Vokabeln ändern</button>
+      <button class="primary" id="againBtn">New draw (same vocabulary)</button>
+      <button id="editBtn">Edit vocabulary</button>
     </div>
   </div>
 </div>
@@ -192,6 +219,7 @@
   var pairs = [];      // { red: n, yellow: n }
   var round = 0;       // 0..11
   var revealed = false;
+  var results = [];    // pro Durchgang: "red" | "yellow" | "draw" | undefined (offen)
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -199,6 +227,7 @@
     ["setup", "game", "end"].forEach(function (s) {
       $(s).classList.toggle("active", s === name);
     });
+    $("title").textContent = name === "setup" ? "⚽ Vokabelfußball" : "⚽ Vocab Football";
   }
 
   // ---- Spieler & Anwesenheit ----
@@ -368,6 +397,7 @@
     if (redraw !== false) draw();
     round = 0;
     revealed = false;
+    results = [];
     show("game");
     render();
   }
@@ -394,36 +424,66 @@
     return s.replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; });
   }
 
+  function score() {
+    var s = { red: 0, yellow: 0 };
+    results.forEach(function (r) { if (r === "red" || r === "yellow") s[r]++; });
+    return s;
+  }
+  function scoreHtml() {
+    var s = score();
+    return '<div class="score yellow"><small>Yellow</small><b>' + s.yellow + '</b></div>' +
+           '<div class="score red"><small>Red</small><b>' + s.red + '</b></div>';
+  }
+
+  function setResult(r) {
+    results[round] = (results[round] === r) ? undefined : r;   // nochmal tippen = zurücknehmen
+    render();
+  }
+
+  function ordinal(n) {
+    return n + (n === 2 ? "nd" : n === 3 ? "rd" : "th");
+  }
+
   function playerHtml(team, n) {
     var count = 0;
     for (var i = 0; i <= round; i++) if (pairs[i][team] === n) count++;
     var name = nameOf(team, n);
-    return '<div class="player ' + team + '">' + team + ' ' + n +
+    var res = results[round];
+    var cls = "player " + team + (res === team ? " won" : (res ? " lost" : ""));
+    return '<div class="' + cls + '" data-act="' + team + '" role="button">' + n +
            (name ? '<div class="pl-name">' + esc(name) + '</div>' : '') +
-           (count > 1 ? '<div class="pl-extra">' + count + '. Einsatz</div>' : '') +
+           (count > 1 ? '<div class="pl-extra">' + ordinal(count) + ' turn</div>' : '') +
+           (res === team ? '<div class="pl-extra">+1 point</div>' : '') +
            '</div>';
   }
 
   function render() {
     var p = pairs[round];
-    $("roundInfo").textContent = "Durchgang " + (round + 1) + " von " + N;
-    $("phaseInfo").textContent = revealed ? "Spieler" : "Vokabel";
+    $("roundInfo").textContent = "Round " + (round + 1) + " of " + N;
+    $("phaseInfo").textContent = revealed ? "Players" : "Vocabulary";
     $("bar").style.width = (((round + (revealed ? 1 : 0)) / N) * 100) + "%";
     var html;
     if (!revealed) {
-      html = '<div class="label">Vokabel</div>' +
+      html = '<div class="label">Vocabulary</div>' +
              '<div class="vocab">' + esc(vocabs[round]) + '</div>' +
-             '<div class="tap">Klick, um die Spieler zu ziehen →</div>';
+             '<div class="tap">Tap to reveal the players →</div>';
     } else {
+      var res = results[round];
+      var hint = res === "draw" ? "Draw – no point this round."
+               : (res ? "" : "Tap the winner to award the point.");
       html = '<div class="small-vocab">' + esc(vocabs[round]) + '</div>' +
              '<div class="vs">' +
                playerHtml("yellow", p.yellow) +
                '<div class="versus">vs.</div>' +
                playerHtml("red", p.red) +
              '</div>' +
-             '<div class="tap">' + (round === N - 1 ? 'Klick für die Übersicht →' : 'Klick für den nächsten Durchgang →') + '</div>';
+             '<div class="tap">' + hint + '</div>' +
+             '<div class="draw-wrap"><button class="draw' + (res === "draw" ? " on" : "") + '" data-act="draw">Draw</button></div>' +
+             '<button class="primary next" data-act="next">' +
+               (round === N - 1 ? 'Show results →' : 'Next round →') + '</button>';
     }
     $("stage").innerHTML = html;
+    $("scoreboard").innerHTML = scoreHtml();
   }
 
   function next() {
@@ -436,10 +496,17 @@
     if (round > 0) { round--; revealed = true; render(); }
   }
 
-  $("stage").addEventListener("click", next);
+  $("stage").addEventListener("click", function (e) {
+    if (!revealed) { next(); return; }          // Vokabel -> Spieler: Klick irgendwo
+    var t = e.target.closest("[data-act]");
+    if (!t) return;
+    var act = t.getAttribute("data-act");
+    if (act === "next") next();
+    else setResult(act);                        // "red", "yellow" oder "draw"
+  });
   $("backBtn").addEventListener("click", back);
   $("quitBtn").addEventListener("click", function () {
-    if (confirm("Spiel abbrechen und zurück zur Eingabe?")) show("setup");
+    if (confirm("Cancel the game and go back to setup?")) show("setup");
   });
 
   document.addEventListener("keydown", function (e) {
@@ -450,13 +517,20 @@
 
   // ---- Ende ----
   function showEnd() {
-    var rows = '<tr><th>#</th><th>Vokabel</th><th>Gelb</th><th>Rot</th></tr>';
+    var html = '<tr><th>#</th><th>Vocabulary</th><th>Yellow</th><th>Red</th><th>Point</th></tr>';
+    var label = { yellow: "Yellow", red: "Red", draw: "Draw" };
     pairs.forEach(function (p, i) {
-      rows += '<tr><td>' + (i + 1) + '</td><td>' + esc(vocabs[i]) + '</td>' +
-              '<td><span class="chip yellow">yellow ' + p.yellow + (nameOf("yellow", p.yellow) ? ' · ' + esc(nameOf("yellow", p.yellow)) : '') + '</span></td>' +
-              '<td><span class="chip red">red ' + p.red + (nameOf("red", p.red) ? ' · ' + esc(nameOf("red", p.red)) : '') + '</span></td></tr>';
+      var r = results[i];
+      html += '<tr><td>' + (i + 1) + '</td><td>' + esc(vocabs[i]) + '</td>' +
+              '<td><span class="chip yellow">' + p.yellow + (nameOf("yellow", p.yellow) ? ' · ' + esc(nameOf("yellow", p.yellow)) : '') + '</span></td>' +
+              '<td><span class="chip red">' + p.red + (nameOf("red", p.red) ? ' · ' + esc(nameOf("red", p.red)) : '') + '</span></td>' +
+              '<td class="win-chip">' + (label[r] || '–') + '</td></tr>';
     });
-    $("summary").innerHTML = rows;
+    $("summary").innerHTML = html;
+    var s = score();
+    $("finalScore").innerHTML = scoreHtml();
+    $("finalLine").textContent = s.red > s.yellow ? "Team red wins!"
+                               : (s.yellow > s.red ? "Team yellow wins!" : "It's a draw!");
     $("bar").style.width = "100%";
     show("end");
   }
