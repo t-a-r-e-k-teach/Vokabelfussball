@@ -1,7 +1,7 @@
 // Service Worker: speichert die App beim ersten Öffnen (mit Internet) auf dem Gerät,
 // danach läuft sie ohne Internet. Bei Änderungen an der App: Versionsnummer erhöhen.
-var CACHE = "vokabelfussball-v3";
-var FILES = ["./", "index.html", "manifest.webmanifest", "icon-180.png", "icon-512.png"];
+var CACHE = "vokabelfussball-v4";
+var FILES = ["./", "index.html"];
 
 self.addEventListener("install", function (e) {
   e.waitUntil(
